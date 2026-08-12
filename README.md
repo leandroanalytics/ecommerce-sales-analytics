@@ -59,6 +59,42 @@ A análise dos dados permitiu identificar os principais indicadores de desempenh
 | Frete Médio por Item | R$ 19,99 |
 | Entregas no Prazo | 91,89% |
 
+### Visualizações da Análise
+
+A seguir estão algumas das principais visualizações desenvolvidas durante a análise exploratória dos dados.
+
+### Evolução Mensal do Faturamento
+
+A evolução mensal permite acompanhar o comportamento das vendas ao longo do período analisado e identificar oscilações relevantes no desempenho da operação.
+
+<p align="center">
+  <img src="imagens/faturamento_mensal.png" width="900">
+</p>
+
+### Categorias com Maior Volume de Vendas
+
+O ranking das categorias permite identificar quais grupos de produtos apresentam maior participação no volume de itens comercializados.
+
+<p align="center">
+  <img src="imagens/categorias_mais_vendidas.png" width="900">
+</p>
+
+### Distribuição de Clientes por Estado
+
+A análise geográfica evidencia a concentração da base de clientes e permite identificar os estados com maior representatividade na operação.
+
+<p align="center">
+  <img src="imagens/clientes_por_estado.png" width="900">
+</p>
+
+### Satisfação por Status da Entrega
+
+A comparação entre o status da entrega e a avaliação dos clientes evidencia uma associação relevante entre desempenho logístico e satisfação.
+
+<p align="center">
+  <img src="imagens/satisfacao_por_entrega.png" width="900">
+</p>
+
 ## Principais Insights
 
 ### Logística e Satisfação
