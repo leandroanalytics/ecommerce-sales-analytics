@@ -751,3 +751,214 @@ CROSS JOIN clientes_kpi
 CROSS JOIN pagamentos_kpi
 CROSS JOIN avaliacoes_kpi
 CROSS JOIN entregas_kpi;
+
+
+-- =========================================================
+-- INVESTIGAÇÃO: POR QUE OS PEDIDOS ATRASAM OU NÃO CHEGAM
+-- (detalhada no notebook 03_investigacao_atrasos.ipynb)
+-- =========================================================
+
+-- =========================================================
+-- 26. PEDIDOS NÃO ENTREGUES POR STATUS
+-- Objetivo: entender em que situação estão os pedidos
+-- que não chegaram ao cliente.
+-- =========================================================
+
+SELECT
+    order_status AS status,
+    COUNT(*) AS pedidos,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS percentual
+FROM olist_orders
+WHERE order_status <> 'delivered'
+GROUP BY order_status
+ORDER BY pedidos DESC;
+
+
+-- =========================================================
+-- 27. DADOS INCOMPLETOS E INCONSISTENTES NOS PEDIDOS
+-- Objetivo: medir a qualidade das datas registradas.
+-- =========================================================
+
+SELECT
+    SUM(CASE WHEN order_delivered_customer_date IS NULL THEN 1 ELSE 0 END) AS sem_data_entrega,
+    SUM(CASE WHEN order_delivered_carrier_date IS NULL THEN 1 ELSE 0 END) AS sem_data_postagem,
+    SUM(CASE WHEN order_approved_at IS NULL THEN 1 ELSE 0 END) AS sem_data_aprovacao,
+    SUM(CASE WHEN order_delivered_carrier_date < order_purchase_timestamp THEN 1 ELSE 0 END) AS postado_antes_da_compra,
+    SUM(CASE WHEN order_delivered_customer_date < order_delivered_carrier_date THEN 1 ELSE 0 END) AS entregue_antes_de_postado,
+    SUM(CASE WHEN order_status = 'delivered' AND order_delivered_customer_date IS NULL THEN 1 ELSE 0 END) AS entregue_sem_data
+FROM olist_orders;
+
+
+-- =========================================================
+-- 28. DURAÇÃO MÉDIA DE CADA ETAPA: NO PRAZO × ATRASADOS
+-- Objetivo: identificar em qual etapa o tempo se perde.
+-- Observação: o SQLite não tem função de mediana; o notebook 03
+-- mostra as medianas, que são menos afetadas por casos extremos.
+-- =========================================================
+
+WITH etapas AS (
+    SELECT
+        CASE
+            WHEN DATE(order_delivered_customer_date) > DATE(order_estimated_delivery_date)
+                THEN 'Atrasados'
+            ELSE 'No prazo'
+        END AS grupo,
+        JULIANDAY(order_approved_at) - JULIANDAY(order_purchase_timestamp) AS aprovacao,
+        JULIANDAY(order_delivered_carrier_date) - JULIANDAY(order_approved_at) AS postagem,
+        JULIANDAY(order_delivered_customer_date) - JULIANDAY(order_delivered_carrier_date) AS transporte
+    FROM olist_orders
+    WHERE
+        order_approved_at IS NOT NULL
+        AND order_delivered_carrier_date IS NOT NULL
+        AND order_delivered_customer_date IS NOT NULL
+)
+
+SELECT
+    grupo,
+    COUNT(*) AS pedidos,
+    ROUND(AVG(aprovacao), 2) AS media_dias_aprovacao,
+    ROUND(AVG(postagem), 2) AS media_dias_postagem,
+    ROUND(AVG(transporte), 2) AS media_dias_transporte
+FROM etapas
+WHERE aprovacao >= 0 AND postagem >= 0 AND transporte >= 0
+GROUP BY grupo;
+
+
+-- =========================================================
+-- 29. TAXA DE ATRASO QUANDO O VENDEDOR POSTA FORA DO PRAZO
+-- Objetivo: medir o peso do vendedor no atraso.
+-- =========================================================
+
+WITH limite AS (
+    SELECT order_id, MAX(shipping_limit_date) AS limite_postagem
+    FROM olist_order_items
+    GROUP BY order_id
+)
+
+SELECT
+    CASE
+        WHEN o.order_delivered_carrier_date > l.limite_postagem
+            THEN 'Vendedor postou atrasado'
+        ELSE 'Vendedor postou no prazo'
+    END AS postagem,
+    COUNT(*) AS pedidos,
+    ROUND(
+        100.0 * SUM(
+            CASE
+                WHEN DATE(o.order_delivered_customer_date) > DATE(o.order_estimated_delivery_date)
+                    THEN 1
+                ELSE 0
+            END
+        ) / COUNT(*),
+        2
+    ) AS taxa_de_atraso
+FROM olist_orders AS o
+INNER JOIN limite AS l
+    ON o.order_id = l.order_id
+WHERE
+    o.order_approved_at IS NOT NULL
+    AND o.order_delivered_carrier_date IS NOT NULL
+    AND o.order_delivered_customer_date IS NOT NULL
+    AND o.order_approved_at >= o.order_purchase_timestamp
+    AND o.order_delivered_carrier_date >= o.order_approved_at
+    AND o.order_delivered_customer_date >= o.order_delivered_carrier_date
+GROUP BY postagem;
+
+
+-- =========================================================
+-- 30. TAXA DE ATRASO: MESMO ESTADO × OUTRO ESTADO
+-- Objetivo: medir o efeito da distância entre vendedor e cliente.
+-- Observação: considera o primeiro item de cada pedido.
+-- =========================================================
+
+WITH vendedor_pedido AS (
+    SELECT i.order_id, s.seller_state
+    FROM olist_order_items AS i
+    INNER JOIN olist_sellers AS s
+        ON i.seller_id = s.seller_id
+    WHERE i.order_item_id = 1
+)
+
+SELECT
+    CASE
+        WHEN v.seller_state = c.customer_state THEN 'Mesmo estado'
+        ELSE 'Outro estado'
+    END AS rota,
+    COUNT(*) AS pedidos,
+    ROUND(
+        100.0 * SUM(
+            CASE
+                WHEN DATE(o.order_delivered_customer_date) > DATE(o.order_estimated_delivery_date)
+                    THEN 1
+                ELSE 0
+            END
+        ) / COUNT(*),
+        2
+    ) AS taxa_de_atraso
+FROM olist_orders AS o
+INNER JOIN olist_customers AS c
+    ON o.customer_id = c.customer_id
+INNER JOIN vendedor_pedido AS v
+    ON o.order_id = v.order_id
+WHERE o.order_delivered_customer_date IS NOT NULL
+GROUP BY rota;
+
+
+-- =========================================================
+-- 31. TAXA DE ATRASO POR MÊS DA COMPRA
+-- Objetivo: identificar períodos críticos (sazonalidade).
+-- =========================================================
+
+SELECT
+    STRFTIME('%Y-%m', order_purchase_timestamp) AS periodo,
+    COUNT(*) AS pedidos_entregues,
+    ROUND(
+        100.0 * SUM(
+            CASE
+                WHEN DATE(order_delivered_customer_date) > DATE(order_estimated_delivery_date)
+                    THEN 1
+                ELSE 0
+            END
+        ) / COUNT(*),
+        2
+    ) AS taxa_de_atraso
+FROM olist_orders
+WHERE
+    order_delivered_customer_date IS NOT NULL
+    AND STRFTIME('%Y-%m', order_purchase_timestamp) BETWEEN '2017-01' AND '2018-08'
+GROUP BY periodo
+ORDER BY taxa_de_atraso DESC;
+
+
+-- =========================================================
+-- 32. PAGAMENTO: TEMPO ATÉ A APROVAÇÃO E CANCELAMENTOS
+-- Objetivo: comparar as formas de pagamento.
+-- Observação: a base não registra tentativas recusadas nem o
+-- motivo da recusa (sem limite, cartão bloqueado, antifraude).
+-- Para pedidos com mais de uma forma de pagamento, considera
+-- a forma do primeiro pagamento.
+-- =========================================================
+
+WITH forma AS (
+    SELECT order_id, payment_type
+    FROM olist_order_payments
+    WHERE payment_sequential = 1
+)
+
+SELECT
+    f.payment_type AS forma_pagamento,
+    COUNT(*) AS pedidos,
+    SUM(CASE WHEN o.order_approved_at IS NULL THEN 1 ELSE 0 END) AS sem_aprovacao,
+    ROUND(
+        AVG((JULIANDAY(o.order_approved_at) - JULIANDAY(o.order_purchase_timestamp)) * 24),
+        1
+    ) AS media_horas_ate_aprovacao,
+    ROUND(
+        100.0 * SUM(CASE WHEN o.order_status IN ('canceled', 'unavailable') THEN 1 ELSE 0 END) / COUNT(*),
+        2
+    ) AS taxa_cancelamento
+FROM olist_orders AS o
+INNER JOIN forma AS f
+    ON o.order_id = f.order_id
+GROUP BY f.payment_type
+ORDER BY pedidos DESC;

@@ -16,10 +16,11 @@ Análise de vendas, clientes, logística e satisfação de um e-commerce brasile
 - Identificar as categorias e os estados mais relevantes
 - Avaliar o frete e o cumprimento dos prazos de entrega
 - Quantificar o efeito dos atrasos na satisfação dos clientes
+- Investigar por que os pedidos atrasam ou não chegam, e o que a base não permite responder
 
 ## Tecnologias
 
-Python · Pandas · NumPy · Matplotlib · Jupyter · SQL (SQLite) · Power BI · Git/GitHub
+Python · Pandas · NumPy · Matplotlib · Jupyter · SQL (SQLite) · Power BI · DAX · Git/GitHub
 
 ## Estrutura do Projeto
 
@@ -31,10 +32,11 @@ ecommerce-sales-analytics/
 ├── imagens/          # gráficos usados neste README
 ├── notebooks/
 │   ├── 01_etl.ipynb                     # carga, qualidade dos dados, EDA e criação do banco SQLite
-│   └── 02_quantificacao_insights.ipynb  # cálculos que sustentam os números deste README
+│   ├── 02_quantificacao_insights.ipynb  # cálculos que sustentam os números deste README
+│   └── 03_investigacao_atrasos.ipynb    # por que os pedidos atrasam ou não chegam
 ├── powerbi/          # dashboard (.pbix)
 ├── sql/
-│   └── analise_ecommerce.sql            # 25 consultas de negócio (inclui CTEs e window functions)
+│   └── analise_ecommerce.sql            # 32 consultas de negócio (inclui CTEs e window functions)
 ├── requirements.txt
 └── README.md
 ```
@@ -131,12 +133,74 @@ Metade dos pagamentos é à vista, mas as compras em 6x ou mais têm valor médi
 
 O gráfico considera **janeiro de 2017 a agosto de 2018**. Os meses de 2016 e de setembro e outubro de 2018 foram excluídos porque têm poucos pedidos registrados na base, o que criaria quedas artificiais. O pico de novembro de 2017 coincide com a Black Friday.
 
+## Investigação: por que os pedidos atrasam ou não chegam
+
+Os insights acima mostram **o que** acontece. Esta seção investiga **por que**, e deixa claro o que a base responde e o que ela não responde. Detalhes no notebook [`03_investigacao_atrasos.ipynb`](notebooks/03_investigacao_atrasos.ipynb) e nas consultas 26 a 32 do SQL.
+
+### Em qual etapa o atraso acontece?
+
+| Etapa (mediana) | No prazo | Atrasados |
+| --- | --- | --- |
+| Aprovação do pagamento | 0,3 hora | 0,4 hora |
+| Postagem pelo vendedor | 1,8 dia | 3,1 dias |
+| **Transporte até o cliente** | **7,0 dias** | **26,2 dias** |
+
+![Duração de cada etapa](imagens/etapas_atraso.png)
+
+- **O transporte é o principal gargalo:** nos pedidos atrasados, ele leva quase 4 vezes mais tempo.
+- **O vendedor também pesa:** quando ele posta depois do prazo combinado, a taxa de atraso sobe de **5,44%** para **20,87%**. Em 27,9% dos pedidos atrasados, o vendedor postou fora do prazo.
+- **A distância conta:** entregas para outro estado atrasam **8,05%** das vezes, contra **4,50%** dentro do mesmo estado.
+- **O prazo prometido não é o problema:** a mediana é de 23 dias nos pedidos no prazo e 22 dias nos atrasados. O atraso vem da execução, não da promessa.
+
+### Quando o atraso acontece?
+
+![Taxa de atraso por mês](imagens/atraso_por_mes.png)
+
+A taxa de atraso dispara em **mar/2018 (19,0%)**, **fev/2018 (14,1%)** e **nov/2017 (12,4%)**, o mês da Black Friday. Fora desses picos, fica abaixo de 8%.
+
+### Por que alguns pedidos não foram entregues?
+
+São **2.963 pedidos** sem entrega concluída. A base não tem campo de motivo, mas o status mostra onde cada um parou:
+
+| Status | Pedidos | O que significa |
+| --- | --- | --- |
+| shipped | 1.107 | Saíram para a transportadora e nunca tiveram entrega confirmada, todos com o prazo vencido no fim da base: indica extravio ou falta de baixa |
+| canceled | 625 | Cancelados |
+| unavailable | 609 | Produto indisponível depois da compra |
+| invoiced, processing, created, approved | 622 | Parados antes do envio |
+
+Esses pedidos têm nota média **1,75**. Entre os 1.903 que deixaram comentário, **699** dizem que não receberam o produto, **325** falam de cancelamento ou estorno e **110** citam Correios ou transportadora (classificação por palavras-chave, aproximada).
+
+### Quanto dado incompleto existe?
+
+| Problema | Quantidade |
+| --- | --- |
+| Pedidos sem data de entrega ao cliente | 2.965 |
+| Pedidos sem data de postagem | 1.783 |
+| Pedidos sem data de aprovação do pagamento | 160 |
+| Pedidos sem nenhum item | 775 |
+| Produtos sem categoria | 610 |
+| Avaliações sem comentário | 58.247 de 99.224 |
+| Pedidos "postados" antes da compra | 166 |
+| Pedidos "entregues" antes de serem postados | 23 |
+
+As análises de etapas desconsideram os pedidos com datas inconsistentes.
+
+### O que a base não permite responder
+
+- **Clientes não localizados e ocorrências no trajeto** (extravio, destinatário ausente, endereço incorreto): não há registro de tentativas de entrega. Como pista indireta, 278 clientes têm CEP ausente da tabela de geolocalização, e só 5 dos 5.749 comentários de pedidos atrasados ou não entregues citam endereço ou destinatário.
+- **Motivo de recusa de pagamento** (sem limite, cartão bloqueado, antifraude): a tabela de pagamentos tem só forma, parcelas e valor. O que dá para medir: 160 pedidos nunca tiveram o pagamento aprovado (141 deles foram cancelados); o boleto leva **29 horas** para ser aprovado, contra 0,3 hora do cartão; e pedidos pagos com **voucher** são cancelados **5,31%** das vezes, contra cerca de 1% nas outras formas.
+
+Para responder essas perguntas numa empresa, seria preciso cruzar estes dados com os eventos de rastreamento da transportadora e com os códigos de recusa do gateway de pagamento.
+
 ## Recomendações
 
-1. **Atacar os atrasos nas rotas críticas** (MA, CE, BA e RJ), revisando transportadoras e prazos estimados nesses estados.
-2. **Rever o cálculo do prazo estimado.** Mesmo atrasos de até 3 dias já tiram 1 ponto da nota, então prometer prazos mais realistas pode ser tão importante quanto entregar mais rápido.
-3. **Acompanhar atraso e nota juntos** em um indicador mensal por estado.
-4. **Usar o parcelamento** como alavanca em categorias de ticket alto, como `relogios_presentes`.
+1. **Atacar os atrasos no transporte**, a etapa que mais pesa, priorizando as rotas críticas (MA, CE, BA e RJ) e as entregas entre estados.
+2. **Cobrar o prazo de postagem dos vendedores:** quem posta atrasado quase quadruplica a chance de atraso.
+3. **Reforçar a operação nos meses de pico** (Black Friday e o primeiro trimestre), quando a taxa de atraso chega a 19%.
+4. **Avisar o cliente antes que ele perceba o atraso.** Mesmo atrasos de até 3 dias já tiram 1 ponto da nota, e 1.573 comentários de pedidos atrasados dizem que o produto não chegou. Rastreamento e aviso proativo podem reduzir esse impacto.
+5. **Acompanhar atraso e nota juntos** em um indicador mensal por estado.
+6. **Usar o parcelamento** como alavanca em categorias de ticket alto, como `relogios_presentes`.
 
 ## Exemplos de SQL
 
@@ -216,7 +280,7 @@ ORDER BY periodo;
    source .venv/bin/activate      # no Windows: .venv\Scripts\activate
    pip install -r requirements.txt
    ```
-4. Execute os notebooks em ordem: `01_etl.ipynb` (gera `data/processed/` e o banco `ecommerce.db`) e depois `02_quantificacao_insights.ipynb`.
+4. Execute os notebooks em ordem: `01_etl.ipynb` (gera `data/processed/` e o banco `ecommerce.db`), `02_quantificacao_insights.ipynb` e `03_investigacao_atrasos.ipynb`.
 5. Para o dashboard, abra `powerbi/Ecommerce_Sales_Analytics.pbix` no Power BI Desktop.
 
 ## Limitações
@@ -224,6 +288,7 @@ ORDER BY periodo;
 - As relações encontradas (como atraso × nota) são **associações**, não prova de causa.
 - Cerca de 3% dos clientes compraram mais de uma vez, então a base não permite análises robustas de recompra ou retenção.
 - O faturamento inclui frete e pedidos cancelados; para receita líquida, esses valores precisariam ser descontados.
+- A base não registra motivos de não entrega, ocorrências no trajeto nem recusas de pagamento (ver a seção de investigação).
 
 ## Autor
 
