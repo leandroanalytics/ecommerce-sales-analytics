@@ -92,7 +92,7 @@ A nota cai conforme o atraso aumenta: **3,29** para atrasos de até 3 dias e **2
 
 ![Nota média por tempo de atraso](imagens/nota_por_atraso.png)
 
-Os atrasos representam só 6,8% das entregas, mas respondem por 37% de todas as avaliações com nota 1. Reduzir atrasos tende a ter mais efeito na nota geral do que qualquer outra alavanca analisada aqui.
+Os atrasos representam só 6,8% das entregas, mas respondem por 37% das notas 1 dadas a pedidos entregues. Reduzir atrasos tende a ter mais efeito na nota geral do que qualquer outra alavanca analisada aqui.
 
 ### 2. Vendas concentradas no Sudeste
 
