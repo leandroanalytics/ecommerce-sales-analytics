@@ -42,3 +42,7 @@ Thumbs.db
 
 # Banco de dados SQLite gerado localmente
 *.db
+# ==============================
+# Dados brutos (baixar do Kaggle, ver README)
+# ==============================
+data/raw/*.csv
