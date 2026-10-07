@@ -2,7 +2,7 @@
 
 Análise de vendas, clientes, logística e satisfação de um e-commerce brasileiro, com **Python (Pandas)**, **SQL (SQLite)** e **Power BI**.
 
-> **Principal achado:** pedidos entregues com atraso recebem nota média **2,57**, contra **4,29** dos entregues no prazo. Quase metade dos pedidos atrasados (**46%**) recebe nota 1.
+> **Principal achado:** pedidos entregues com atraso recebem nota média **2,27**, contra **4,29** dos entregues no prazo. Mais da metade dos pedidos atrasados (**54%**) recebe nota 1.
 
 ## Sobre os Dados
 
@@ -34,7 +34,7 @@ ecommerce-sales-analytics/
 │   └── 02_quantificacao_insights.ipynb  # cálculos que sustentam os números deste README
 ├── powerbi/          # dashboard (.pbix)
 ├── sql/
-│   └── analise_ecommerce.sql            # 18 consultas de negócio
+│   └── analise_ecommerce.sql            # 25 consultas de negócio (inclui CTEs e window functions)
 ├── requirements.txt
 └── README.md
 ```
@@ -49,8 +49,8 @@ ecommerce-sales-analytics/
 | Clientes únicos | 96.096 |
 | Nota média de satisfação | 4,09 / 5 |
 | Frete médio por item | R$ 19,99 |
-| Entregas no prazo | 91,89% |
-| Atraso médio dos pedidos atrasados | 8,9 dias |
+| Entregas no prazo | 93,23% |
+| Atraso médio dos pedidos atrasados | 10,6 dias |
 
 ### Como as métricas foram calculadas
 
@@ -58,8 +58,8 @@ ecommerce-sales-analytics/
 - **Ticket médio:** faturamento ÷ número de pedidos (é um valor **por pedido**, não por cliente).
 - **Clientes únicos:** contagem de `customer_unique_id`, já que o `customer_id` muda a cada pedido.
 - **Nota média:** média de `review_score` de todas as avaliações.
-- **Entregas no prazo:** pedidos com data de entrega menor ou igual à data estimada, entre os 96.476 que têm as duas datas preenchidas.
-- **Atraso médio:** dias entre a data estimada e a data de entrega, considerando só os 7.827 pedidos atrasados.
+- **Entregas no prazo:** pedidos cuja **data** de entrega é menor ou igual à **data** estimada, entre os 96.476 que têm as duas datas preenchidas. A comparação é feita só pelo dia, sem a hora: a data estimada não tem horário (é sempre 00:00), então quem recebeu no próprio dia previsto está no prazo. Comparando data e hora, 1.292 pedidos entregues no dia certo seriam contados como atrasados, embora tenham nota média de 4,03, igual à dos pedidos no prazo.
+- **Atraso médio:** dias de calendário entre a data estimada e a data de entrega, considerando só os 6.535 pedidos atrasados.
 
 ## Dashboard (Power BI)
 
@@ -85,20 +85,20 @@ Nota média, entregas no prazo e atraso médio, com o percentual de pedidos atra
 
 | Status da entrega | Avaliações | Nota média | Nota 1 | Nota 4 ou 5 |
 | --- | --- | --- | --- | --- |
-| No prazo | 88.658 | **4,29** | 6,6% | 82,8% |
-| Com atraso | 7.701 | **2,57** | 46,2% | 34,6% |
+| No prazo | 89.949 | **4,29** | 6,6% | 82,6% |
+| Com atraso | 6.410 | **2,27** | 53,7% | 26,7% |
 
-A nota cai conforme o atraso aumenta: **3,59** para atrasos de até 3 dias e **2,10** entre 4 e 7 dias. A partir de uma semana de atraso, a nota média fica abaixo de 1,8. Quando um pedido atrasa, ele chega em média **8,9 dias** depois do prazo, ou seja, justamente na faixa em que a nota despenca.
+A nota cai conforme o atraso aumenta: **3,29** para atrasos de até 3 dias e **2,10** entre 4 e 7 dias. A partir de uma semana de atraso, a nota média fica abaixo de 1,8. Quando um pedido atrasa, ele chega em média **10,6 dias** depois do prazo, ou seja, justamente na faixa em que a nota despenca.
 
 ![Nota média por tempo de atraso](imagens/nota_por_atraso.png)
 
-Os atrasos representam só 8,1% das entregas, mas concentram uma parcela desproporcional das avaliações negativas. Reduzir atrasos tende a ter mais efeito na nota geral do que qualquer outra alavanca analisada aqui.
+Os atrasos representam só 6,8% das entregas, mas respondem por 37% de todas as avaliações com nota 1. Reduzir atrasos tende a ter mais efeito na nota geral do que qualquer outra alavanca analisada aqui.
 
 ### 2. Vendas concentradas no Sudeste
 
 **SP, RJ e MG** concentram **66,5% dos clientes** e **62,6% do faturamento**. Só São Paulo responde por 41,9% dos clientes.
 
-Os estados com mais atraso (entre os que têm mais de 500 entregas) são **MA (19,7%)**, **CE (15,3%)**, **BA (14,0%)** e **RJ (13,5%)**, contra 5,9% em SP. O RJ chama atenção por combinar alto volume com atraso acima da média.
+Os estados com mais atraso (entre os que têm mais de 500 entregas) são **MA (17,4%)**, **CE (13,8%)**, **BA (12,2%)** e **RJ (12,1%)**, contra 4,5% em SP. O RJ chama atenção por combinar alto volume com atraso acima da média.
 
 ![Clientes por estado](imagens/clientes_por_estado.png)
 
@@ -134,7 +134,7 @@ O gráfico considera **janeiro de 2017 a agosto de 2018**. Os meses de 2016 e de
 ## Recomendações
 
 1. **Atacar os atrasos nas rotas críticas** (MA, CE, BA e RJ), revisando transportadoras e prazos estimados nesses estados.
-2. **Rever o cálculo do prazo estimado.** Mesmo atrasos de até 3 dias já tiram 0,7 ponto da nota, então prometer prazos mais realistas pode ser tão importante quanto entregar mais rápido.
+2. **Rever o cálculo do prazo estimado.** Mesmo atrasos de até 3 dias já tiram 1 ponto da nota, então prometer prazos mais realistas pode ser tão importante quanto entregar mais rápido.
 3. **Acompanhar atraso e nota juntos** em um indicador mensal por estado.
 4. **Usar o parcelamento** como alavanca em categorias de ticket alto, como `relogios_presentes`.
 
@@ -162,7 +162,7 @@ ORDER BY faturamento_total DESC;
 ```sql
 SELECT
     CASE
-        WHEN o.order_delivered_customer_date <= o.order_estimated_delivery_date
+        WHEN DATE(o.order_delivered_customer_date) <= DATE(o.order_estimated_delivery_date)
             THEN 'No Prazo'
         ELSE 'Atrasada'
     END AS status_entrega,
@@ -175,6 +175,31 @@ WHERE o.order_delivered_customer_date IS NOT NULL
   AND o.order_estimated_delivery_date IS NOT NULL
 GROUP BY status_entrega
 ORDER BY nota_media DESC;
+```
+
+**Crescimento mensal do faturamento (CTE + window function `LAG`)**
+
+```sql
+WITH faturamento_mensal AS (
+    SELECT
+        STRFTIME('%Y-%m', o.order_purchase_timestamp) AS periodo,
+        SUM(p.payment_value) AS faturamento
+    FROM olist_orders AS o
+    INNER JOIN olist_order_payments AS p
+        ON o.order_id = p.order_id
+    WHERE STRFTIME('%Y-%m', o.order_purchase_timestamp) BETWEEN '2017-01' AND '2018-08'
+    GROUP BY periodo
+)
+SELECT
+    periodo,
+    ROUND(faturamento, 2) AS faturamento,
+    ROUND(
+        100.0 * (faturamento - LAG(faturamento) OVER (ORDER BY periodo))
+        / LAG(faturamento) OVER (ORDER BY periodo),
+        2
+    ) AS variacao_percentual
+FROM faturamento_mensal
+ORDER BY periodo;
 ```
 
 ## Como Reproduzir
