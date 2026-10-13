@@ -292,6 +292,5 @@ ORDER BY periodo;
 
 ## Autor
 
-**Leandro Gomes**, Analista de Dados | Python · SQL · Power BI
-
-[LinkedIn](https://www.linkedin.com/in/leandro-h-o-gomes/) · [GitHub](https://github.com/leandroanalytics) · lhog14121987@gmail.com
+**Leandro Gomes** · Analista de Dados<br>
+[GitHub](https://github.com/leandroanalytics) · [LinkedIn](https://www.linkedin.com/in/leandroanalytics)
